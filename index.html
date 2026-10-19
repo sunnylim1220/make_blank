@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>make blank</title>
+<style>
+html{overflow-y:scroll;scrollbar-gutter:stable;min-height:101vh}*{box-sizing:border-box;font-weight:400}body{min-height:101vh;margin:0;font-family:Arial,sans-serif;background:#fff;color:#111827;font-size:15px}.app{width:100%;max-width:1080px;margin:0 auto;padding:12px}h1,p,button,span,div,textarea,label{font-family:Arial,sans-serif;font-weight:400;font-size:15px}h1{font-size:11.25px;line-height:24px;height:24px;margin:0}.panel{width:100%;border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin-bottom:10px;background:#fff}.topBar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap}.buttons{display:flex;gap:8px;flex-wrap:wrap}button{border:1px solid #d1d5db;border-radius:7px;padding:7px 10px;cursor:pointer;background:#fff;color:#111827}button:hover{border-color:#2563eb}button.primary{border-color:#2563eb;color:#2563eb}.topBar button{height:24px;padding:0 9px;line-height:22px;font-size:11.25px}.adminGrid{display:grid;grid-template-columns:1fr;gap:18px;margin-top:14px}label{display:block;margin-bottom:6px}textarea,.maskedEditor{width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px;font-size:15px;line-height:1.7;color:#111827;background:#fff;min-height:380px;height:380px;resize:vertical;white-space:pre-wrap;overflow-wrap:anywhere}textarea:focus,.maskedEditor:focus{outline:none;border-color:#2563eb}.maskedEditor{overflow:auto;resize:vertical;user-select:text}.maskedEditor:empty:before{content:attr(data-placeholder);color:#9ca3af}.help{color:#6b7280;font-size:12px;line-height:1.6;margin:8px 0 0}.buttons.controls{margin-top:8px}.status{color:#2563eb;font-size:12px;min-height:18px;margin-top:8px}.blankWordHighlight{background:#eff6ff;color:#1d4ed8;border-radius:2px}@media(max-width:600px){.app{padding:8px}.panel{padding:10px}textarea,.maskedEditor{height:300px;min-height:300px}}
+</style>
+</head>
+<body><main class="app"><section class="panel"><div class="topBar"><h1>make blank</h1><div class="buttons"><button id="copyBtn" class="primary">빈칸 문단 복사</button><button id="clearBtn">전체 초기화</button></div></div><div class="adminGrid"><div><label for="original">정답 원문</label><textarea id="original" spellcheck="false" placeholder="정답 원문을 입력하세요. 빈칸으로 만들 글자를 드래그한 뒤 버튼을 누르세요."></textarea><div class="buttons controls"><button class="primary" id="blankBtn">선택 글자 빈칸화</button><button id="resetBtn">빈칸 초기화</button><button id="undoBtn">되돌리기</button><button id="redoBtn">다시 실행</button></div><p class="help">선택한 첫 글자는 _, 두 번째 글자부터는 공백을 포함한 _ 로 변환합니다. 예: under → un_ _ _ (der 선택)</p></div><div><label for="masked">자동 생성된 빈칸 문단</label><div id="masked" class="maskedEditor" contenteditable="true" spellcheck="false" data-placeholder="정답 원문을 입력하면 자동으로 복사됩니다."></div><p class="help">아래 문단은 직접 수정할 수도 있습니다. 원문을 변경하면 빈칸 지정은 초기화됩니다.</p></div></div><div class="status" id="status" role="status"></div></section></main>
+<script>
+(()=>{'use strict';
+const original=document.getElementById('original'),masked=document.getElementById('masked'),status=document.getElementById('status');
+let marks=[],undo=[],redo=[],manual=null;const MAX=150;
+const snapshot=()=>({text:original.value,marks:[...marks],manual});
+function save(){undo.push(snapshot());if(undo.length>MAX)undo.shift();redo=[]}
+function setStatus(t){status.textContent=t}
+function escapeHTML(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function build(){if(manual!==null)return manual;let out='',prevBlank=false;for(let i=0;i<original.value.length;i++){let ch=original.value[i],blank=!!marks[i]&&!/\s/.test(ch);if(blank){out+=(prevBlank?' _':'_')}else{out+=ch}prevBlank=blank}return out}
+function render(){let t=build();masked.innerHTML=escapeHTML(t).replace(/((?:[A-Za-z]*_)(?: _)*[A-Za-z_]*)/g,'<span class="blankWordHighlight">$1</span>');}
+function restore(s){original.value=s.text;marks=[...s.marks];manual=s.manual;render()}
+original.addEventListener('input',()=>{save();marks=Array(original.value.length).fill(false);manual=null;render();setStatus('원문을 수정하여 빈칸을 초기화했습니다.')});
+document.getElementById('blankBtn').addEventListener('mousedown',e=>e.preventDefault());
+document.getElementById('blankBtn').addEventListener('click',()=>{const a=original.selectionStart,b=original.selectionEnd;if(a===b){setStatus('빈칸으로 만들 글자를 먼저 드래그하세요.');return}save();if(manual!==null){manual=null;marks=Array(original.value.length).fill(false)}for(let i=a;i<b;i++)if(!/\s/.test(original.value[i]))marks[i]=true;render();original.focus();original.setSelectionRange(a,b);setStatus('선택한 글자를 빈칸으로 바꿨습니다.')});
+document.getElementById('resetBtn').onclick=()=>{save();marks=Array(original.value.length).fill(false);manual=null;render();setStatus('빈칸을 초기화했습니다.')};
+document.getElementById('clearBtn').onclick=()=>{save();original.value='';marks=[];manual=null;render();setStatus('전체 초기화했습니다.')};
+function go(from,to){if(!from.length)return;to.push(snapshot());restore(from.pop());setStatus('변경 내역을 복원했습니다.')}
+document.getElementById('undoBtn').onclick=()=>go(undo,redo);document.getElementById('redoBtn').onclick=()=>go(redo,undo);
+masked.addEventListener('input',()=>{manual=masked.innerText.replace(/\u00a0/g,' ');setStatus('빈칸 문단을 직접 수정했습니다.')});
+document.getElementById('copyBtn').onclick=async()=>{const t=build();try{await navigator.clipboard.writeText(t);setStatus('빈칸 문단을 복사했습니다.')}catch{const ta=document.createElement('textarea');ta.value=t;document.body.append(ta);ta.select();const ok=document.execCommand('copy');ta.remove();setStatus(ok?'빈칸 문단을 복사했습니다.':'복사에 실패했습니다.')}};
+document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&document.activeElement!==original&&document.activeElement!==masked){e.preventDefault();go(e.shiftKey?redo:undo,e.shiftKey?undo:redo)}});
+render();})();
+</script></body></html>
